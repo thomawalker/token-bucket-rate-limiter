@@ -1,0 +1,44 @@
+import time
+import threading
+
+
+class RateLimiter:
+    """Thread-safe token bucket rate limiter."""
+
+    def __init__(self, rate: float, capacity: int):
+        """
+        :param rate: Tokens added per second.
+        :param capacity: Maximum burst capacity.
+        """
+        if rate <= 0 or capacity <= 0:
+            raise ValueError("rate and capacity must be positive")
+
+        self.rate = rate
+        self.capacity = capacity
+        self.tokens = float(capacity)
+        self.last_refill = time.monotonic()
+        self._lock = threading.Lock()
+
+    def allow(self, tokens: int = 1) -> bool:
+        """Return True if the request is allowed, False otherwise."""
+        if tokens <= 0:
+            raise ValueError("tokens must be positive")
+
+        with self._lock:
+            now = time.monotonic()
+            elapsed = now - self.last_refill
+            self.tokens = min(self.capacity, self.tokens + elapsed * self.rate)
+            self.last_refill = now
+
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return True
+            return False
+
+
+if __name__ == "__main__":
+    limiter = RateLimiter(rate=2.0, capacity=5)
+    for i in range(8):
+        allowed = limiter.allow()
+        print(f"Request {i + 1}: {'ALLOWED' if allowed else 'RATE LIMITED'}")
+        time.sleep(0.2)
